@@ -1,0 +1,13 @@
+{
+	"servers": {
+		"hue": {
+			"type": "stdio",
+			"command": "uv",
+			"args": [
+				"run",
+				".\\hue_server.py"
+			]
+		}
+	},
+	"inputs": []
+}

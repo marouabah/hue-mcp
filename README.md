@@ -1,6 +1,10 @@
 # Philips Hue MCP Server
 
-A powerful Model Context Protocol (MCP) interface for controlling Philips Hue smart lighting systems.
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
+
+A powerful Model Context Protocol (MCP) interface for controlling Philips Hue smart lighting systems. Enable AI assistants like Claude to control your lights using natural language.
 
 ## Table of Contents
 
@@ -44,17 +48,14 @@ This server leverages the Model Context Protocol (MCP) to provide a seamless int
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install phue mcp
+# Install dependencies using uv (recommended)
+uv sync
 
-# Run the server (HTTP/SSE mode)
-python hue_server.py
-
-# Run the server (stdio mode for MCP clients)
-python hue_server.py --stdio
+# Test with MCP Inspector
+uv run mcp dev hue_server.py
 
 # Install in Claude Desktop
-mcp install hue_server.py --name "My Hue Lights"
+uv run mcp install hue_server.py --name "Philips Hue"
 ```
 
 Then in Claude, start with: "I'd like to control my Philips Hue lights. Can you show me which lights I have available?"
@@ -63,25 +64,48 @@ Then in Claude, start with: "I'd like to control my Philips Hue lights. Can you 
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.10 or higher
+- [uv](https://docs.astral.sh/uv/) package manager (recommended)
 - A Philips Hue bridge on your local network
 - Philips Hue lights paired with your bridge
 
 ### Installation
 
-1. Clone this repository or download the `hue_server.py` file
-2. Install the required dependencies:
+**Using uv (recommended):**
 
 ```bash
-pip install phue mcp
+# Clone the repository
+git clone https://github.com/ThomasRohde/hue-mcp.git
+cd hue-mcp
+
+# Install dependencies and create virtual environment automatically
+uv sync
+
+# Activate the virtual environment (optional, uv run handles this automatically)
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+**Using pip:**
+
+```bash
+# Clone the repository
+git clone https://github.com/ThomasRohde/hue-mcp.git
+cd hue-mcp
+
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -e ".[dev]"
 ```
 
 ### First Run
 
-1. Run the server:
+1. Test the server with the MCP Inspector:
 
 ```bash
-python hue_server.py
+uv run mcp dev hue_server.py
 ```
 
 2. When prompted, press the link button on your Hue bridge to authorize the connection
@@ -89,20 +113,33 @@ python hue_server.py
 
 ## Using with Claude
 
-### Option 1: Install in Claude Desktop
+### Install in Claude Desktop
 
-If you have Claude Desktop installed:
+The easiest way to use this server with Claude Desktop:
 
 ```bash
-mcp install hue_server.py --name "Philips Hue Controller"
+# Install with default name
+uv run mcp install hue_server.py
+
+# Or with custom name
+uv run mcp install hue_server.py --name "Philips Hue Controller"
+
+# With environment variables if needed
+uv run mcp install hue_server.py --name "Hue" -v DEBUG=1
 ```
 
-### Option 2: Test with the MCP Inspector
+### Test with MCP Inspector
 
-For development and testing:
+For development and testing, use the MCP Inspector:
 
 ```bash
-mcp dev hue_server.py
+uv run mcp dev hue_server.py
+
+# With additional dependencies
+uv run mcp dev hue_server.py --with pandas
+
+# With debug logging
+uv run mcp dev hue_server.py --log-level debug
 ```
 
 ## API Reference
@@ -196,27 +233,42 @@ quick_scene("Evening Relaxation", group_id=2, rgb=[255, 147, 41], brightness=120
 
 ## Advanced Options
 
-Run the server with custom settings:
+### Command Line Arguments
+
+The server supports the following command line arguments when run directly:
 
 ```bash
+# Run with stdio transport (default, for MCP clients)
+python hue_server.py
+
 # Run with custom host and port (HTTP/SSE mode)
-python hue_server.py --host 0.0.0.0 --port 8888 --log-level debug
+python hue_server.py --sse --host 0.0.0.0 --port 8888
 
-# Run in stdio mode for MCP clients
-python hue_server.py --stdio --log-level debug
+# Enable debug logging
+python hue_server.py --log-level debug
 
-# All available options:
+# Show all available options
 python hue_server.py --help
 ```
 
-### Command Line Arguments
-
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `--host` | Host to bind the server to (HTTP/SSE mode only) | `127.0.0.1` |
-| `--port` | Port to run the server on (HTTP/SSE mode only) | `8080` |
+| `--host` | Host to bind the server to (SSE mode only) | `127.0.0.1` |
+| `--port` | Port to run the server on (SSE mode only) | `8080` |
 | `--log-level` | Logging level (debug, info, warning, error, critical) | `info` |
-| `--stdio` | Run server using stdio transport instead of HTTP/SSE | `False` |
+| `--sse` | Run server using SSE transport instead of stdio | `False` |
+
+### Development Mode
+
+When developing or testing:
+
+```bash
+# Use MCP dev command for automatic reloading
+uv run mcp dev hue_server.py --log-level debug
+
+# Or run directly with uv (stdio is default)
+uv run python hue_server.py --log-level debug
+```
 
 ## Troubleshooting
 
@@ -249,12 +301,43 @@ All communication with your Hue system happens locally within your network for s
 
 ## Contributing
 
-Contributions are welcome! Feel free to:
+We are passionate about supporting contributors of all levels of experience and would love to see you get involved in the project. See the [contributing guide](CONTRIBUTING.md) to get started.
 
-- Report bugs and suggest features in the issue tracker
-- Submit pull requests with improvements
-- Share examples of how you're using this with your smart home setup
+### Project Structure
+
+```
+hue-mcp/
+├── hue_server.py       # Main MCP server implementation
+├── pyproject.toml      # Project configuration and dependencies
+├── README.md           # This file
+├── CONTRIBUTING.md     # Contribution guidelines
+├── CHANGELOG.md        # Version history
+├── LICENSE             # MIT License
+├── tests/              # Test suite
+│   ├── __init__.py
+│   └── test_hue_server.py
+└── .venv/              # Virtual environment (created during setup)
+```
+
+### Development
+
+```bash
+# Install development dependencies
+uv sync
+
+# Run tests
+uv run pytest
+
+# Format code
+uv run ruff check --fix hue_server.py
+
+# Type check
+uv run mypy hue_server.py
+
+# Test with MCP Inspector
+uv run mcp dev hue_server.py --log-level debug
+```
 
 ## License
 
-This project is available under the MIT license.
+This project is available under the MIT license. See [LICENSE](LICENSE) for details.
