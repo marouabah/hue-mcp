@@ -9,6 +9,7 @@ A powerful Model Context Protocol (MCP) interface for controlling Philips Hue sm
 ## Table of Contents
 
 - [Philips Hue MCP Server](#philips-hue-mcp-server)
+  - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
   - [Features](#features)
   - [Quick Start](#quick-start)
@@ -17,6 +18,9 @@ A powerful Model Context Protocol (MCP) interface for controlling Philips Hue sm
     - [Installation](#installation)
     - [First Run](#first-run)
   - [Using with Claude](#using-with-claude)
+    - [Install in Claude Desktop](#install-in-claude-desktop)
+    - [Manual Configuration](#manual-configuration)
+    - [Test with MCP Inspector](#test-with-mcp-inspector)
   - [API Reference](#api-reference)
     - [Resources](#resources)
     - [Tools](#tools)
@@ -26,9 +30,13 @@ A powerful Model Context Protocol (MCP) interface for controlling Philips Hue sm
     - [Working with Groups](#working-with-groups)
     - [Creating Scenes](#creating-scenes)
   - [Advanced Options](#advanced-options)
+    - [Command Line Arguments](#command-line-arguments)
+    - [Development Mode](#development-mode)
   - [Troubleshooting](#troubleshooting)
   - [How It Works](#how-it-works)
   - [Contributing](#contributing)
+    - [Project Structure](#project-structure)
+    - [Development](#development)
   - [License](#license)
 
 ## Overview
@@ -127,6 +135,54 @@ uv run mcp install hue_server.py --name "Philips Hue Controller"
 # With environment variables if needed
 uv run mcp install hue_server.py --name "Hue" -v DEBUG=1
 ```
+
+### Manual Configuration
+
+Alternatively, you can manually configure Claude Desktop by editing the configuration file:
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the following configuration:
+
+**macOS:**
+```json
+{
+  "mcpServers": {
+    "hue": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/username/Projects/hue-mcp",
+        "run",
+        "hue_server.py"
+      ]
+    }
+  }
+}
+```
+
+**Windows:**
+```json
+{
+  "mcpServers": {
+    "hue": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "c:\\Users\\username\\Projects\\hue-mcp",
+        "run",
+        "hue_server.py"
+      ]
+    }
+  }
+}
+```
+
+Replace `/Users/username/Projects/hue-mcp` (macOS) or `c:\\Users\\username\\Projects\\hue-mcp` (Windows) with the actual path to your cloned repository. The `--directory` flag ensures `uv` runs in the correct project directory and can find the dependencies defined in `pyproject.toml`.
+
+After updating the configuration, restart Claude Desktop for the changes to take effect.
 
 ### Test with MCP Inspector
 
