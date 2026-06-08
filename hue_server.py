@@ -43,9 +43,14 @@ Version: 0.3.0
 import json
 import logging
 import os
+import signal
+import subprocess
+import sys
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -205,6 +210,27 @@ def rgb_to_xy(r: int, g: int, b: int) -> list[float]:
     y = Y / sum_XYZ
 
     return [x, y]
+
+def resolve_light_id(light_id: int | None, light_name: str | None, light_info: dict[str, Any]) -> int | None:
+    """Resolve either a light_id or a light_name to a numeric light ID.
+
+    Args:
+        light_id: Numeric ID (priority if provided and non-zero)
+        light_name: Name of the light (case-insensitive partial match)
+        light_info: Dictionary of light information from the bridge
+
+    Returns:
+        Resolved numeric light ID, or None if not found
+    """
+    if light_id:
+        return light_id
+    if not light_name:
+        return None
+    name_lower = light_name.lower()
+    for lid, info in light_info.items():
+        if name_lower in info.get("name", "").lower():
+            return int(lid)
+    return None
 
 def validate_light_id(light_id: int, light_info: dict[str, Any]) -> bool:
     """
@@ -382,12 +408,13 @@ def get_all_scenes(ctx: Context) -> str:
 # --- Tools ---
 
 @mcp.tool()
-def turn_on_light(light_id: int, ctx: Context) -> str:
+def turn_on_light(ctx: Context, light_id: int = 0, light_name: str = "") -> str:
     """
-    Turn on a specific light by ID.
+    Turn on a specific light by ID or by name.
 
     Args:
-        light_id: The ID of the light to turn on
+        light_id: The numeric ID of the light (priority over light_name)
+        light_name: The name of the light (case-insensitive partial match)
 
     Returns:
         Confirmation message
@@ -395,23 +422,26 @@ def turn_on_light(light_id: int, ctx: Context) -> str:
     bridge, light_info = get_bridge_ctx(ctx)
 
     try:
-        # Validate light ID
-        if not validate_light_id(light_id, light_info):
-            return f"Error: Light with ID {light_id} not found."
+        resolved = resolve_light_id(light_id or None, light_name or None, light_info)
+        if resolved is None:
+            return f"Error: Light not found (light_id={light_id}, light_name='{light_name}')."
+        if not validate_light_id(resolved, light_info):
+            return f"Error: Light with ID {resolved} not found."
 
-        bridge.set_light(light_id, 'on', True)
-        return f"Light {light_id} ({light_info[str(light_id)]['name']}) turned on."
+        bridge.set_light(resolved, 'on', True)
+        return f"Light {resolved} ({light_info[str(resolved)]['name']}) turned on."
     except Exception as e:
-        logger.error(f"Error turning on light {light_id}: {e}")
+        logger.error(f"Error turning on light: {e}")
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def turn_off_light(light_id: int, ctx: Context) -> str:
+def turn_off_light(ctx: Context, light_id: int = 0, light_name: str = "") -> str:
     """
-    Turn off a specific light by ID.
+    Turn off a specific light by ID or by name.
 
     Args:
-        light_id: The ID of the light to turn off
+        light_id: The numeric ID of the light (priority over light_name)
+        light_name: The name of the light (case-insensitive partial match)
 
     Returns:
         Confirmation message
@@ -419,14 +449,16 @@ def turn_off_light(light_id: int, ctx: Context) -> str:
     bridge, light_info = get_bridge_ctx(ctx)
 
     try:
-        # Validate light ID
-        if not validate_light_id(light_id, light_info):
-            return f"Error: Light with ID {light_id} not found."
+        resolved = resolve_light_id(light_id or None, light_name or None, light_info)
+        if resolved is None:
+            return f"Error: Light not found (light_id={light_id}, light_name='{light_name}')."
+        if not validate_light_id(resolved, light_info):
+            return f"Error: Light with ID {resolved} not found."
 
-        bridge.set_light(light_id, 'on', False)
-        return f"Light {light_id} ({light_info[str(light_id)]['name']}) turned off."
+        bridge.set_light(resolved, 'on', False)
+        return f"Light {resolved} ({light_info[str(resolved)]['name']}) turned off."
     except Exception as e:
-        logger.error(f"Error turning off light {light_id}: {e}")
+        logger.error(f"Error turning off light: {e}")
         return f"Error: {str(e)}"
 
 @mcp.tool()
@@ -553,12 +585,12 @@ def set_color_temperature(light_id: int, temperature: int, ctx: Context) -> str:
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def turn_on_group(group_id: int, ctx: Context) -> str:
+def turn_on_group(ctx: Context, group_id: int = 81) -> str:
     """
     Turn on all lights in a specific group.
 
     Args:
-        group_id: The ID of the group
+        group_id: The ID of the group (default: 81 = Chambre a coucher)
 
     Returns:
         Confirmation message
@@ -581,12 +613,12 @@ def turn_on_group(group_id: int, ctx: Context) -> str:
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def turn_off_group(group_id: int, ctx: Context) -> str:
+def turn_off_group(ctx: Context, group_id: int = 81) -> str:
     """
     Turn off all lights in a specific group.
 
     Args:
-        group_id: The ID of the group
+        group_id: The ID of the group (default: 81 = Chambre a coucher)
 
     Returns:
         Confirmation message
@@ -609,13 +641,13 @@ def turn_off_group(group_id: int, ctx: Context) -> str:
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def set_group_brightness(group_id: int, brightness: int, ctx: Context) -> str:
+def set_group_brightness(brightness: int, ctx: Context, group_id: int = 81) -> str:
     """
     Set the brightness of all lights in a group.
 
     Args:
-        group_id: The ID of the group
         brightness: Brightness level (0-254)
+        group_id: The ID of the group (default: 81 = Chambre a coucher)
 
     Returns:
         Confirmation message
@@ -648,15 +680,15 @@ def set_group_brightness(group_id: int, brightness: int, ctx: Context) -> str:
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def set_group_color_rgb(group_id: int, red: int, green: int, blue: int, ctx: Context) -> str:
+def set_group_color_rgb(red: int, green: int, blue: int, ctx: Context, group_id: int = 81) -> str:
     """
     Set color for all lights in a group using RGB values.
 
     Args:
-        group_id: The ID of the group
         red: Red value (0-255)
         green: Green value (0-255)
         blue: Blue value (0-255)
+        group_id: The ID of the group (default: 81 = Chambre a coucher)
 
     Returns:
         Confirmation message
@@ -687,13 +719,13 @@ def set_group_color_rgb(group_id: int, red: int, green: int, blue: int, ctx: Con
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def set_scene(group_id: int, scene_id: str, ctx: Context) -> str:
+def set_scene(scene_id: str, ctx: Context, group_id: int = 81) -> str:
     """
     Apply a scene to a group.
 
     Args:
-        group_id: The ID of the group
         scene_id: The ID of the scene
+        group_id: The ID of the group (default: 81 = Chambre a coucher)
 
     Returns:
         Confirmation message
@@ -718,6 +750,62 @@ def set_scene(group_id: int, scene_id: str, ctx: Context) -> str:
         return f"Scene '{scene_name}' applied to group '{group_name}'."
     except Exception as e:
         logger.error(f"Error applying scene {scene_id} to group {group_id}: {e}")
+        return f"Error: {str(e)}"
+
+def normalize_text(text: str) -> str:
+    """Remove accents and lowercase for comparison."""
+    import unicodedata
+    # Normalize to decomposed form, remove combining marks, lowercase
+    normalized = unicodedata.normalize('NFD', text)
+    without_accents = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+    return without_accents.lower()
+
+@mcp.tool()
+def activate_scene_by_name(scene_name: str, ctx: Context, group_id: int = 81) -> str:
+    """
+    Find and activate a scene by its name (partial match, accent-insensitive).
+
+    Args:
+        scene_name: Name of the scene to find (case and accent insensitive, partial match)
+        group_id: The ID of the group to apply the scene to (default: 81 = Chambre a coucher)
+
+    Returns:
+        Confirmation message or error if scene not found
+    """
+    bridge, _ = get_bridge_ctx(ctx)
+
+    try:
+        # Validate group ID
+        if not validate_group_id(group_id, bridge):
+            return f"Error: Group with ID {group_id} not found."
+
+        # Search for scene by name (accent-insensitive)
+        scenes = bridge.get_scene()
+        search_name = normalize_text(scene_name)
+
+        matching_scene_id = None
+        matching_scene_name = None
+
+        for sid, scene in scenes.items():
+            name = scene.get('name', '')
+            if search_name in normalize_text(name):
+                matching_scene_id = sid
+                matching_scene_name = name
+                break
+
+        if not matching_scene_id:
+            # List available scenes in error message
+            available = [s.get('name', 'Unknown') for s in list(scenes.values())[:10]]
+            return f"Error: Scene '{scene_name}' not found. Available: {', '.join(available)}"
+
+        # Get group name for better feedback
+        group_name = bridge.get_group(group_id).get('name', f"Group {group_id}")
+
+        # Apply the scene
+        bridge.set_group(group_id, 'scene', matching_scene_id)
+        return f"Scene '{matching_scene_name}' applied to group '{group_name}'."
+    except Exception as e:
+        logger.error(f"Error activating scene '{scene_name}': {e}")
         return f"Error: {str(e)}"
 
 # --- Helper Tools ---
@@ -966,17 +1054,17 @@ def set_color_preset(
 
 @mcp.tool()
 def set_group_color_preset(
-    group_id: int,
     preset: str,
-    ctx: Context
+    ctx: Context,
+    group_id: int = 81
 ) -> str:
     """
     Apply a color preset to a group.
 
     Args:
-        group_id: The ID of the group
         preset: Color preset name (warm, cool, daylight, concentration,
                 relax, reading, energize, red, green, blue, purple, orange)
+        group_id: The ID of the group (default: 81 = Chambre a coucher)
 
     Returns:
         Confirmation message
@@ -1095,6 +1183,170 @@ def set_light_effect(light_id: int, effect: str, ctx: Context) -> str:
         logger.error(f"Error setting effect {effect} on light {light_id}: {e}")
         return f"Error: {str(e)}"
 
+# --- HueBeat : controle du beat-sync Entertainment API ---
+
+_HUE_BEAT_PY    = "/home/amineutron/dev/ironman-hue/hue_beat.py"
+_HUE_BEAT_PID   = "/tmp/ironman_hue.pid"
+_HUE_BEAT_CTRL  = "/tmp/lyra_hue_beat.ctrl"
+_HUE_BEAT_STATE = "/tmp/lyra_hue_beat.state.json"
+
+_VALID_PALETTES  = {"ironman", "fire", "neon", "cool", "sunset", "arctic", "auto"}
+_VALID_MODES     = {"pulse", "ambiant"}
+
+
+def _load_hue_env() -> dict:
+    """Construit l'env pour hue_beat.py en chargeant les credentials depuis secrets.yaml."""
+    env = os.environ.copy()
+    secrets_path = Path.home() / "dev" / "lyra" / "secrets.yaml"
+    if secrets_path.exists():
+        try:
+            import yaml
+            with open(secrets_path) as f:
+                sec = yaml.safe_load(f) or {}
+            hue_sec = sec.get("hue", {})
+            if hue_sec.get("beat_username"):
+                env["HUE_USER"] = hue_sec["beat_username"]
+            if hue_sec.get("clientkey"):
+                env["HUE_CLIENTKEY"] = hue_sec["clientkey"]
+            if hue_sec.get("area_id"):
+                env["HUE_AREA_ID"] = hue_sec["area_id"]
+        except Exception as e:
+            logger.warning(f"secrets.yaml non charge: {e} -- hue_beat utilisera ses defauts")
+    return env
+
+
+def _beat_pid() -> int | None:
+    """Retourne le PID de hue_beat si actif, None sinon."""
+    try:
+        pid = int(open(_HUE_BEAT_PID).read().strip())
+        os.kill(pid, 0)   # signal 0 = test d'existence seulement
+        return pid
+    except (OSError, ValueError, FileNotFoundError):
+        return None
+
+
+@mcp.tool()
+def hue_beat_start(mode: str = "", palette: str = "auto", bass_only: bool = True) -> str:
+    """Lance hue_beat.py en arriere-plan (Entertainment API DTLS ~5ms).
+
+    Pendant que hue_beat tourne, les commandes REST Hue sur les lumieres
+    de l'area Entertainment sont suspendues (contrainte firmware Philips).
+
+    Args:
+        mode:      pulse | ambiant  (defaut: pulse si ironman, ambiant sinon)
+        palette:   ironman | fire | neon | cool | sunset | arctic | auto  (defaut: auto)
+        bass_only: True pour synchroniser uniquement les basses  (defaut: True)
+    """
+    if palette not in _VALID_PALETTES:
+        return f"Erreur: palette invalide '{palette}'. Choix: {', '.join(sorted(_VALID_PALETTES))}"
+
+    if not mode:
+        mode = "pulse" if palette == "ironman" else "ambiant"
+    if mode not in _VALID_MODES:
+        return f"Erreur: mode invalide '{mode}'. Choix: {', '.join(_VALID_MODES)}"
+
+    if _beat_pid() is not None:
+        return "hue_beat est deja en cours. Utilisez hue_beat_stop() avant de relancer."
+
+    args = [sys.executable, _HUE_BEAT_PY, f"--mode={mode}", f"--palette={palette}"]
+    if bass_only:
+        args.append("--bass-only")
+
+    env = _load_hue_env()
+    log = open("/tmp/hue_beat.log", "w")
+    subprocess.Popen(args, stdout=log, stderr=log, start_new_session=True, env=env)
+
+    # Attendre max 3s que le PID file apparaisse
+    for _ in range(6):
+        time.sleep(0.5)
+        if _beat_pid() is not None:
+            return f"hue_beat demarre (mode={mode}, palette={palette})."
+    return "hue_beat lance mais PID file absent apres 3s — verifier les logs."
+
+
+@mcp.tool()
+def hue_beat_stop() -> str:
+    """Arrete hue_beat proprement (SIGTERM → stop_entertainment → REST reprend)."""
+    pid = _beat_pid()
+    if pid is None:
+        return "hue_beat n'est pas en cours."
+    try:
+        os.kill(pid, signal.SIGTERM)
+        for _ in range(10):
+            time.sleep(0.3)
+            if _beat_pid() is None:
+                return f"hue_beat (PID {pid}) arrete. Mode REST Hue restaure."
+        os.kill(pid, signal.SIGKILL)
+        return f"hue_beat (PID {pid}) force-kill (SIGKILL) apres 3s sans reponse."
+    except ProcessLookupError:
+        return "hue_beat deja arrete."
+
+
+@mcp.tool()
+def hue_beat_status() -> str:
+    """Retourne l'etat de hue_beat (actif/inactif, mode, palette, BPM)."""
+    pid = _beat_pid()
+    if pid is None:
+        return "hue_beat: inactif."
+    try:
+        state = json.loads(open(_HUE_BEAT_STATE).read())
+        age   = round(time.time() - state.get("ts", 0), 1)
+        return (
+            f"hue_beat: ACTIF (PID {pid})\n"
+            f"  mode:       {state.get('mode', '?')}\n"
+            f"  palette:    {state.get('palette', '?')}\n"
+            f"  bpm:        {state.get('bpm', 0):.1f}\n"
+            f"  beats:      {state.get('beat_count', 0)}\n"
+            f"  etat age:   {age}s"
+        )
+    except Exception:
+        return f"hue_beat: ACTIF (PID {pid}) — state file illisible."
+
+
+@mcp.tool()
+def hue_beat_set(palette: str = "", mode: str = "", brightness: float = -1.0,
+                 floor: float = -1.0, sensitivity: float = -1.0) -> str:
+    """Modifie les parametres de hue_beat a chaud (sans redemarrage).
+
+    Args:
+        palette:     ironman | fire | neon | cool | sunset | arctic | auto  (vide = inchange)
+        mode:        pulse | ambiant  (vide = inchange)
+        brightness:  0.1–1.0, intensite max sur les beats  (-1 = inchange)
+        floor:       0.0–0.9, niveau ambiant entre les beats (-1 = inchange)
+                     Ecart = brightness - floor. Plus il est grand, plus le pulse est visible.
+        sensitivity: 0.5–3.0, multiplicateur de detection de beat  (-1 = inchange)
+    """
+    if _beat_pid() is None:
+        return "hue_beat n'est pas en cours. Lancez hue_beat_start() d'abord."
+
+    cmd: dict = {}
+    if palette:
+        if palette not in _VALID_PALETTES:
+            return f"Erreur: palette invalide '{palette}'. Choix: {', '.join(sorted(_VALID_PALETTES))}"
+        cmd["palette"] = palette
+    if mode:
+        if mode not in _VALID_MODES:
+            return f"Erreur: mode invalide '{mode}'. Choix: {', '.join(_VALID_MODES)}"
+        cmd["mode"] = mode
+    if brightness >= 0:
+        cmd["brightness"] = max(0.1, min(1.0, brightness))
+    if floor >= 0:
+        cmd["floor"] = max(0.0, min(0.9, floor))
+    if sensitivity >= 0:
+        cmd["sensitivity"] = max(0.5, min(3.0, sensitivity))
+
+    if not cmd:
+        return "Aucun parametre fourni. Specifiez au moins palette, mode, brightness ou sensitivity."
+
+    tmp = _HUE_BEAT_CTRL + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cmd, f)
+    os.replace(tmp, _HUE_BEAT_CTRL)
+
+    changes = ", ".join(f"{k}={v}" for k, v in cmd.items())
+    return f"Commande envoyee a hue_beat: {changes} (prise en compte sous ~500ms)."
+
+
 # --- Prompts ---
 
 @mcp.prompt()
@@ -1194,7 +1446,8 @@ if __name__ == "__main__":
             log_level=args.log_level
         )
     else:
-        print("Starting Philips Hue MCP Server in stdio mode")
-        print("Press Ctrl+C to stop the server")
+        import sys
+        print("Starting Philips Hue MCP Server in stdio mode", file=sys.stderr)
+        print("Press Ctrl+C to stop the server", file=sys.stderr)
 
         mcp.run(transport='stdio')
