@@ -1185,7 +1185,7 @@ def set_light_effect(light_id: int, effect: str, ctx: Context) -> str:
 
 # --- HueBeat : controle du beat-sync Entertainment API ---
 
-_HUE_BEAT_PY    = "/home/amineutron/dev/ironman-hue/hue_beat.py"
+_HUE_BEAT_PY    = os.environ.get("HUE_BEAT_PATH", "/home/amineutron/dev/ironman-hue/hue_beat.py")
 _HUE_BEAT_PID   = "/tmp/ironman_hue.pid"
 _HUE_BEAT_CTRL  = "/tmp/lyra_hue_beat.ctrl"
 _HUE_BEAT_STATE = "/tmp/lyra_hue_beat.state.json"
@@ -1218,7 +1218,8 @@ def _load_hue_env() -> dict:
 def _beat_pid() -> int | None:
     """Retourne le PID de hue_beat si actif, None sinon."""
     try:
-        pid = int(open(_HUE_BEAT_PID).read().strip())
+        with open(_HUE_BEAT_PID) as f:
+            pid = int(f.read().strip())
         os.kill(pid, 0)   # signal 0 = test d'existence seulement
         return pid
     except (OSError, ValueError, FileNotFoundError):
@@ -1248,13 +1249,17 @@ def hue_beat_start(mode: str = "", palette: str = "auto", bass_only: bool = True
     if _beat_pid() is not None:
         return "hue_beat est deja en cours. Utilisez hue_beat_stop() avant de relancer."
 
+    if not Path(_HUE_BEAT_PY).is_file():
+        return (f"hue_beat.py introuvable: {_HUE_BEAT_PY}\n"
+                f"Definir HUE_BEAT_PATH dans l'environnement ou config.yaml.")
+
     args = [sys.executable, _HUE_BEAT_PY, f"--mode={mode}", f"--palette={palette}"]
     if bass_only:
         args.append("--bass-only")
 
     env = _load_hue_env()
-    log = open("/tmp/hue_beat.log", "w")
-    subprocess.Popen(args, stdout=log, stderr=log, start_new_session=True, env=env)
+    with open("/tmp/hue_beat.log", "w") as log:
+        subprocess.Popen(args, stdout=log, stderr=log, start_new_session=True, env=env)
 
     # Attendre max 3s que le PID file apparaisse
     for _ in range(6):
