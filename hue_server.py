@@ -127,7 +127,8 @@ async def hue_lifespan(server: FastMCP) -> AsyncIterator[HueContext]:
                 'bridge_ip': bridge.ip,
                 'username': bridge.username
             }, f)
-            logger.info(f"Saved configuration to {CONFIG_FILE}")
+        os.chmod(CONFIG_FILE, 0o600)
+        logger.info(f"Saved configuration to {CONFIG_FILE}")
 
         # Build a cache of light information for faster access
         light_info = bridge.get_light()
