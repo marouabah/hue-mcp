@@ -313,12 +313,12 @@ def get_light(light_id: int, ctx: Context) -> str:
 
         # Check if the light exists
         if light_id_str not in light_info:
-            return f"Error: Light with ID {light_id} not found."
+            raise ValueError(f"Light with ID {light_id} not found.")
 
         return json.dumps(light_info[light_id_str], indent=2)
     except Exception as e:
         logger.error(f"Error getting light {light_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def get_all_groups(ctx: Context) -> str:
@@ -347,7 +347,7 @@ def get_all_groups(ctx: Context) -> str:
         return json.dumps(formatted_groups, indent=2)
     except Exception as e:
         logger.error(f"Error getting groups: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def get_group(group_id: int, ctx: Context) -> str:
@@ -370,12 +370,12 @@ def get_group(group_id: int, ctx: Context) -> str:
 
         # Check if the group exists
         if group_id_str not in groups:
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         return json.dumps(groups[group_id_str], indent=2)
     except Exception as e:
         logger.error(f"Error getting group {group_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def get_all_scenes(ctx: Context) -> str:
@@ -404,7 +404,7 @@ def get_all_scenes(ctx: Context) -> str:
         return json.dumps(formatted_scenes, indent=2)
     except Exception as e:
         logger.error(f"Error getting scenes: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 # --- Tools ---
 
@@ -425,15 +425,15 @@ def turn_on_light(ctx: Context, light_id: int = 0, light_name: str = "") -> str:
     try:
         resolved = resolve_light_id(light_id or None, light_name or None, light_info)
         if resolved is None:
-            return f"Error: Light not found (light_id={light_id}, light_name='{light_name}')."
+            raise ValueError(f"Light not found (light_id={light_id}, light_name='{light_name}').")
         if not validate_light_id(resolved, light_info):
-            return f"Error: Light with ID {resolved} not found."
+            raise ValueError(f"Light with ID {resolved} not found.")
 
         bridge.set_light(resolved, 'on', True)
         return f"Light {resolved} ({light_info[str(resolved)]['name']}) turned on."
     except Exception as e:
         logger.error(f"Error turning on light: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def turn_off_light(ctx: Context, light_id: int = 0, light_name: str = "") -> str:
@@ -452,15 +452,15 @@ def turn_off_light(ctx: Context, light_id: int = 0, light_name: str = "") -> str
     try:
         resolved = resolve_light_id(light_id or None, light_name or None, light_info)
         if resolved is None:
-            return f"Error: Light not found (light_id={light_id}, light_name='{light_name}')."
+            raise ValueError(f"Light not found (light_id={light_id}, light_name='{light_name}').")
         if not validate_light_id(resolved, light_info):
-            return f"Error: Light with ID {resolved} not found."
+            raise ValueError(f"Light with ID {resolved} not found.")
 
         bridge.set_light(resolved, 'on', False)
         return f"Light {resolved} ({light_info[str(resolved)]['name']}) turned off."
     except Exception as e:
         logger.error(f"Error turning off light: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_brightness(light_id: int, brightness: int, ctx: Context) -> str:
@@ -475,14 +475,14 @@ def set_brightness(light_id: int, brightness: int, ctx: Context) -> str:
         Confirmation message
     """
     if not 0 <= brightness <= 254:
-        return "Error: Brightness must be between 0 and 254."
+        raise ValueError("Brightness must be between 0 and 254.")
 
     bridge, light_info = get_bridge_ctx(ctx)
 
     try:
         # Validate light ID
         if not validate_light_id(light_id, light_info):
-            return f"Error: Light with ID {light_id} not found."
+            raise ValueError(f"Light with ID {light_id} not found.")
 
         # Turn on the light if it's off
         if not light_info[str(light_id)]['state']['on']:
@@ -495,7 +495,7 @@ def set_brightness(light_id: int, brightness: int, ctx: Context) -> str:
         return f"Light {light_id} ({light_info[str(light_id)]['name']}) brightness set to {brightness} ({percentage}%)."
     except Exception as e:
         logger.error(f"Error setting brightness for light {light_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_color_rgb(light_id: int, red: int, green: int, blue: int, ctx: Context) -> str:
@@ -512,18 +512,18 @@ def set_color_rgb(light_id: int, red: int, green: int, blue: int, ctx: Context) 
         Confirmation message
     """
     if not all(0 <= c <= 255 for c in (red, green, blue)):
-        return "Error: RGB values must be between 0 and 255."
+        raise ValueError("RGB values must be between 0 and 255.")
 
     bridge, light_info = get_bridge_ctx(ctx)
 
     try:
         # Validate light ID
         if not validate_light_id(light_id, light_info):
-            return f"Error: Light with ID {light_id} not found."
+            raise ValueError(f"Light with ID {light_id} not found.")
 
         # Check if light supports color
         if 'xy' not in light_info[str(light_id)]['state']:
-            return f"Error: Light {light_id} ({light_info[str(light_id)]['name']}) does not support color."
+            raise ValueError(f"Light {light_id} ({light_info[str(light_id)]['name']}) does not support color.")
 
         # Turn on the light if it's off
         if not light_info[str(light_id)]['state']['on']:
@@ -534,7 +534,7 @@ def set_color_rgb(light_id: int, red: int, green: int, blue: int, ctx: Context) 
         return f"Light {light_id} ({light_info[str(light_id)]['name']}) color set to RGB({red}, {green}, {blue})."
     except Exception as e:
         logger.error(f"Error setting RGB color for light {light_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_color_temperature(light_id: int, temperature: int, ctx: Context) -> str:
@@ -558,18 +558,18 @@ def set_color_temperature(light_id: int, temperature: int, ctx: Context) -> str:
         set_color_temperature(2, 6500)  # Cool white for working
     """
     if not 2000 <= temperature <= 6500:
-        return "Error: Temperature must be between 2000K and 6500K."
+        raise ValueError("Temperature must be between 2000K and 6500K.")
 
     bridge, light_info = get_bridge_ctx(ctx)
 
     try:
         # Validate light ID
         if not validate_light_id(light_id, light_info):
-            return f"Error: Light with ID {light_id} not found."
+            raise ValueError(f"Light with ID {light_id} not found.")
 
         # Check if light supports color temperature
         if 'ct' not in light_info[str(light_id)]['state']:
-            return f"Error: Light {light_id} ({light_info[str(light_id)]['name']}) does not support color temperature."
+            raise ValueError(f"Light {light_id} ({light_info[str(light_id)]['name']}) does not support color temperature.")
 
         # Turn on the light if it's off
         if not light_info[str(light_id)]['state']['on']:
@@ -583,7 +583,7 @@ def set_color_temperature(light_id: int, temperature: int, ctx: Context) -> str:
         return f"Light {light_id} ({light_info[str(light_id)]['name']}) color temperature set to {temperature}K."
     except Exception as e:
         logger.error(f"Error setting color temperature for light {light_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def turn_on_group(ctx: Context, group_id: int = 81) -> str:
@@ -601,7 +601,7 @@ def turn_on_group(ctx: Context, group_id: int = 81) -> str:
     try:
         # Validate group ID
         if not validate_group_id(group_id, bridge):
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         # Get group info for name
         group_info = bridge.get_group(group_id)
@@ -611,7 +611,7 @@ def turn_on_group(ctx: Context, group_id: int = 81) -> str:
         return f"Group {group_id} ({group_name}) turned on."
     except Exception as e:
         logger.error(f"Error turning on group {group_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def turn_off_group(ctx: Context, group_id: int = 81) -> str:
@@ -629,7 +629,7 @@ def turn_off_group(ctx: Context, group_id: int = 81) -> str:
     try:
         # Validate group ID
         if not validate_group_id(group_id, bridge):
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         # Get group info for name
         group_info = bridge.get_group(group_id)
@@ -639,7 +639,7 @@ def turn_off_group(ctx: Context, group_id: int = 81) -> str:
         return f"Group {group_id} ({group_name}) turned off."
     except Exception as e:
         logger.error(f"Error turning off group {group_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_group_brightness(brightness: int, ctx: Context, group_id: int = 81) -> str:
@@ -654,14 +654,14 @@ def set_group_brightness(brightness: int, ctx: Context, group_id: int = 81) -> s
         Confirmation message
     """
     if not 0 <= brightness <= 254:
-        return "Error: Brightness must be between 0 and 254."
+        raise ValueError("Brightness must be between 0 and 254.")
 
     bridge, _ = get_bridge_ctx(ctx)
 
     try:
         # Validate group ID
         if not validate_group_id(group_id, bridge):
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         # Get group info for name
         group_info = bridge.get_group(group_id)
@@ -678,7 +678,7 @@ def set_group_brightness(brightness: int, ctx: Context, group_id: int = 81) -> s
         return f"Group {group_id} ({group_name}) brightness set to {brightness} ({percentage}%)."
     except Exception as e:
         logger.error(f"Error setting brightness for group {group_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_group_color_rgb(red: int, green: int, blue: int, ctx: Context, group_id: int = 81) -> str:
@@ -695,14 +695,14 @@ def set_group_color_rgb(red: int, green: int, blue: int, ctx: Context, group_id:
         Confirmation message
     """
     if not all(0 <= c <= 255 for c in (red, green, blue)):
-        return "Error: RGB values must be between 0 and 255."
+        raise ValueError("RGB values must be between 0 and 255.")
 
     bridge, _ = get_bridge_ctx(ctx)
 
     try:
         # Validate group ID
         if not validate_group_id(group_id, bridge):
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         # Get group info for name
         group_info = bridge.get_group(group_id)
@@ -717,7 +717,7 @@ def set_group_color_rgb(red: int, green: int, blue: int, ctx: Context, group_id:
         return f"Group {group_id} ({group_name}) color set to RGB({red}, {green}, {blue})."
     except Exception as e:
         logger.error(f"Error setting color for group {group_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_scene(scene_id: str, ctx: Context, group_id: int = 81) -> str:
@@ -736,12 +736,12 @@ def set_scene(scene_id: str, ctx: Context, group_id: int = 81) -> str:
     try:
         # Validate group ID
         if not validate_group_id(group_id, bridge):
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         # Verify the scene exists
         scenes = bridge.get_scene()
         if scene_id not in scenes:
-            return f"Error: Scene with ID {scene_id} not found."
+            raise ValueError(f"Scene with ID {scene_id} not found.")
 
         # Get names for better feedback
         group_name = bridge.get_group(group_id).get('name', f"Group {group_id}")
@@ -751,7 +751,7 @@ def set_scene(scene_id: str, ctx: Context, group_id: int = 81) -> str:
         return f"Scene '{scene_name}' applied to group '{group_name}'."
     except Exception as e:
         logger.error(f"Error applying scene {scene_id} to group {group_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 def normalize_text(text: str) -> str:
     """Remove accents and lowercase for comparison."""
@@ -778,7 +778,7 @@ def activate_scene_by_name(scene_name: str, ctx: Context, group_id: int = 81) ->
     try:
         # Validate group ID
         if not validate_group_id(group_id, bridge):
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         # Search for scene by name (accent-insensitive)
         scenes = bridge.get_scene()
@@ -797,7 +797,7 @@ def activate_scene_by_name(scene_name: str, ctx: Context, group_id: int = 81) ->
         if not matching_scene_id:
             # List available scenes in error message
             available = [s.get('name', 'Unknown') for s in list(scenes.values())[:10]]
-            return f"Error: Scene '{scene_name}' not found. Available: {', '.join(available)}"
+            raise ValueError(f"Scene '{scene_name}' not found. Available: {', '.join(available)}")
 
         # Get group name for better feedback
         group_name = bridge.get_group(group_id).get('name', f"Group {group_id}")
@@ -807,7 +807,7 @@ def activate_scene_by_name(scene_name: str, ctx: Context, group_id: int = 81) ->
         return f"Scene '{matching_scene_name}' applied to group '{group_name}'."
     except Exception as e:
         logger.error(f"Error activating scene '{scene_name}': {e}")
-        return f"Error: {str(e)}"
+        raise
 
 # --- Helper Tools ---
 
@@ -844,7 +844,7 @@ def find_light_by_name(name: str, ctx: Context) -> str:
         return json.dumps(matches, indent=2)
     except Exception as e:
         logger.error(f"Error finding lights by name '{name}': {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def create_group(
@@ -868,7 +868,7 @@ def create_group(
         # Validate all light IDs
         invalid_lights = [lid for lid in light_ids if not validate_light_id(lid, light_info)]
         if invalid_lights:
-            return f"Error: Invalid light IDs: {invalid_lights}"
+            raise ValueError(f"Invalid light IDs: {invalid_lights}")
 
         # Convert light IDs to strings (Hue API requirement)
         light_id_strings = [str(lid) for lid in light_ids]
@@ -884,10 +884,10 @@ def create_group(
             group_id = success_path.split('/')[-1]
             return f"Group '{name}' created with ID {group_id}, containing {len(light_ids)} lights."
         else:
-            return f"Error creating group: {result}"
+            raise ValueError(f"Echec creating group: {result}")
     except Exception as e:
         logger.error(f"Error creating group '{name}': {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def quick_scene(
@@ -916,7 +916,7 @@ def quick_scene(
     try:
         # Validate group ID
         if not validate_group_id(group_id, bridge):
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         # Get group info for name
         group_info = bridge.get_group(group_id)
@@ -928,18 +928,18 @@ def quick_scene(
         # Apply settings
         if brightness is not None:
             if not 0 <= brightness <= 254:
-                return "Error: Brightness must be between 0 and 254."
+                raise ValueError("Brightness must be between 0 and 254.")
             bridge.set_group(group_id, 'bri', brightness)
 
         if rgb is not None:
             if not all(0 <= c <= 255 for c in rgb) or len(rgb) != 3:
-                return "Error: RGB values must be three values between 0 and 255."
+                raise ValueError("RGB values must be three values between 0 and 255.")
             xy = rgb_to_xy(rgb[0], rgb[1], rgb[2])
             bridge.set_group(group_id, 'xy', xy)
 
         if temperature is not None:
             if not 2000 <= temperature <= 6500:
-                return "Error: Temperature must be between 2000K and 6500K."
+                raise ValueError("Temperature must be between 2000K and 6500K.")
             # Convert temperature in K to mired
             mired = int(1000000 / temperature)
             bridge.set_group(group_id, 'ct', mired)
@@ -956,7 +956,7 @@ def quick_scene(
         return f"Scene '{name}' applied to group '{group_name}' with {', '.join(changes)}."
     except Exception as e:
         logger.error(f"Error applying quick scene '{name}': {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def refresh_lights(ctx: Context) -> str:
@@ -982,7 +982,7 @@ def refresh_lights(ctx: Context) -> str:
         return f"Refreshed information for {len(light_info)} lights."
     except Exception as e:
         logger.error(f"Error refreshing lights: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_color_preset(
@@ -1023,22 +1023,22 @@ def set_color_preset(
     }
 
     if preset not in presets:
-        return f"Error: Unknown preset. Available presets: {', '.join(presets.keys())}"
+        raise ValueError(f"Unknown preset. Available presets: {', '.join(presets.keys())}")
 
     bridge, light_info = get_bridge_ctx(ctx)
 
     try:
         # Validate light ID
         if not validate_light_id(light_id, light_info):
-            return f"Error: Light with ID {light_id} not found."
+            raise ValueError(f"Light with ID {light_id} not found.")
 
         # Check capability for color temperature
         if "ct" in presets[preset] and 'ct' not in light_info[str(light_id)]['state']:
-            return f"Error: Light {light_id} does not support color temperature."
+            raise ValueError(f"Light {light_id} does not support color temperature.")
 
         # Check capability for xy color
         if "xy" in presets[preset] and 'xy' not in light_info[str(light_id)]['state']:
-            return f"Error: Light {light_id} does not support color."
+            raise ValueError(f"Light {light_id} does not support color.")
 
         # Turn on the light if it's off
         if not light_info[str(light_id)]['state']['on']:
@@ -1051,7 +1051,7 @@ def set_color_preset(
         return f"Applied '{preset}' preset to light {light_id} ({light_info[str(light_id)]['name']})."
     except Exception as e:
         logger.error(f"Error applying preset '{preset}' to light {light_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_group_color_preset(
@@ -1092,14 +1092,14 @@ def set_group_color_preset(
     }
 
     if preset not in presets:
-        return f"Error: Unknown preset. Available presets: {', '.join(presets.keys())}"
+        raise ValueError(f"Unknown preset. Available presets: {', '.join(presets.keys())}")
 
     bridge, _ = get_bridge_ctx(ctx)
 
     try:
         # Validate group ID
         if not validate_group_id(group_id, bridge):
-            return f"Error: Group with ID {group_id} not found."
+            raise ValueError(f"Group with ID {group_id} not found.")
 
         # Get group info for name
         group_info = bridge.get_group(group_id)
@@ -1116,7 +1116,7 @@ def set_group_color_preset(
         return f"Applied '{preset}' preset to group '{group_name}'."
     except Exception as e:
         logger.error(f"Error applying preset '{preset}' to group {group_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def alert_light(light_id: int, ctx: Context) -> str:
@@ -1134,7 +1134,7 @@ def alert_light(light_id: int, ctx: Context) -> str:
     try:
         # Validate light ID
         if not validate_light_id(light_id, light_info):
-            return f"Error: Light with ID {light_id} not found."
+            raise ValueError(f"Light with ID {light_id} not found.")
 
         # Use the alert feature of Hue lights
         bridge.set_light(light_id, 'alert', 'select')
@@ -1142,7 +1142,7 @@ def alert_light(light_id: int, ctx: Context) -> str:
         return f"Light {light_id} ({light_info[str(light_id)]['name']}) alerted with a brief flash."
     except Exception as e:
         logger.error(f"Error alerting light {light_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 @mcp.tool()
 def set_light_effect(light_id: int, effect: str, ctx: Context) -> str:
@@ -1159,18 +1159,18 @@ def set_light_effect(light_id: int, effect: str, ctx: Context) -> str:
     # Validate effect type
     valid_effects = ['none', 'colorloop']
     if effect not in valid_effects:
-        return f"Error: Effect must be one of: {', '.join(valid_effects)}"
+        raise ValueError(f"Effect must be one of: {', '.join(valid_effects)}")
 
     bridge, light_info = get_bridge_ctx(ctx)
 
     try:
         # Validate light ID
         if not validate_light_id(light_id, light_info):
-            return f"Error: Light with ID {light_id} not found."
+            raise ValueError(f"Light with ID {light_id} not found.")
 
         # Check if light supports color (needed for effects)
         if 'xy' not in light_info[str(light_id)]['state']:
-            return f"Error: Light {light_id} ({light_info[str(light_id)]['name']}) does not support color effects."
+            raise ValueError(f"Light {light_id} ({light_info[str(light_id)]['name']}) does not support color effects.")
 
         # Turn on the light if it's off
         if not light_info[str(light_id)]['state']['on']:
@@ -1182,7 +1182,7 @@ def set_light_effect(light_id: int, effect: str, ctx: Context) -> str:
         return f"Set {effect_name} on light {light_id} ({light_info[str(light_id)]['name']})."
     except Exception as e:
         logger.error(f"Error setting effect {effect} on light {light_id}: {e}")
-        return f"Error: {str(e)}"
+        raise
 
 # --- HueBeat : controle du beat-sync Entertainment API ---
 
@@ -1240,12 +1240,12 @@ def hue_beat_start(mode: str = "", palette: str = "auto", bass_only: bool = True
         bass_only: True pour synchroniser uniquement les basses  (defaut: True)
     """
     if palette not in _VALID_PALETTES:
-        return f"Erreur: palette invalide '{palette}'. Choix: {', '.join(sorted(_VALID_PALETTES))}"
+        raise ValueError(f"palette invalide '{palette}'. Choix: {', '.join(sorted(_VALID_PALETTES))}")
 
     if not mode:
         mode = "pulse" if palette == "ironman" else "ambiant"
     if mode not in _VALID_MODES:
-        return f"Erreur: mode invalide '{mode}'. Choix: {', '.join(_VALID_MODES)}"
+        raise ValueError(f"mode invalide '{mode}'. Choix: {', '.join(_VALID_MODES)}")
 
     if _beat_pid() is not None:
         return "hue_beat est deja en cours. Utilisez hue_beat_stop() avant de relancer."
@@ -1328,11 +1328,11 @@ def hue_beat_set(palette: str = "", mode: str = "", brightness: float = -1.0,
     cmd: dict = {}
     if palette:
         if palette not in _VALID_PALETTES:
-            return f"Erreur: palette invalide '{palette}'. Choix: {', '.join(sorted(_VALID_PALETTES))}"
+            raise ValueError(f"palette invalide '{palette}'. Choix: {', '.join(sorted(_VALID_PALETTES))}")
         cmd["palette"] = palette
     if mode:
         if mode not in _VALID_MODES:
-            return f"Erreur: mode invalide '{mode}'. Choix: {', '.join(_VALID_MODES)}"
+            raise ValueError(f"mode invalide '{mode}'. Choix: {', '.join(_VALID_MODES)}")
         cmd["mode"] = mode
     if brightness >= 0:
         cmd["brightness"] = max(0.1, min(1.0, brightness))
